@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View, Animated, Pressable, Dimensions, Easing } from 'react-native';
+import { StyleSheet, View, Animated, Pressable, Dimensions, Easing, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
 
@@ -8,6 +8,32 @@ const bearSize = Math.min(width, height) * 0.7;
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
+const clarityProjectId = process.env.EXPO_PUBLIC_CLARITY_PROJECT_ID;
+
+function loadClarity(projectId) {
+  if (
+    Platform.OS !== 'web' ||
+    !projectId ||
+    typeof window === 'undefined' ||
+    typeof document === 'undefined'
+  ) {
+    return;
+  }
+
+  if (document.getElementById('microsoft-clarity-script')) {
+    return;
+  }
+
+  window.clarity = window.clarity || function clarityQueue() {
+    (window.clarity.q = window.clarity.q || []).push(arguments);
+  };
+
+  const script = document.createElement('script');
+  script.id = 'microsoft-clarity-script';
+  script.async = true;
+  script.src = `https://www.clarity.ms/tag/${projectId}`;
+  document.head.appendChild(script);
+}
 
 function getInteractionZone(locationX, locationY) {
   const x = (locationX / bearSize) * 200;
@@ -58,6 +84,10 @@ export default function App() {
   const BREATH_SCALE = 1.06;
   const TOUCHED_BREATH_DURATION = 6000;
   const TOUCHED_BREATH_SCALE = 1.025;
+
+  useEffect(() => {
+    loadClarity(clarityProjectId);
+  }, []);
 
   const queueTimeout = useCallback((callback, delay) => {
     const id = setTimeout(() => {
