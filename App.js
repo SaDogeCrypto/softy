@@ -35,6 +35,27 @@ function loadClarity(projectId) {
   document.head.appendChild(script);
 }
 
+function trackClarityEvent(eventName, metadata) {
+  if (
+    Platform.OS !== 'web' ||
+    typeof window === 'undefined' ||
+    typeof window.clarity !== 'function'
+  ) {
+    return;
+  }
+
+  try {
+    if (metadata) {
+      window.clarity('event', eventName, metadata);
+      return;
+    }
+
+    window.clarity('event', eventName);
+  } catch (error) {
+    console.warn('Clarity event tracking failed', error);
+  }
+}
+
 function getInteractionZone(locationX, locationY) {
   const x = (locationX / bearSize) * 200;
   const y = (locationY / bearSize) * 200;
@@ -175,6 +196,18 @@ export default function App() {
       deltaY = -6;
       nextBlush = 0.38;
       closeDelay = 220;
+    }
+
+    trackClarityEvent('bear_interaction', { zone });
+
+    if (zone === 'nose') {
+      trackClarityEvent('nose_booped');
+    } else if (zone === 'forehead') {
+      trackClarityEvent('forehead_pet');
+    } else if (zone === 'left-ear' || zone === 'right-ear') {
+      trackClarityEvent('ear_tapped', { side: zone === 'left-ear' ? 'left' : 'right' });
+    } else if (zone === 'left-cheek' || zone === 'right-cheek') {
+      trackClarityEvent('cheek_tapped', { side: zone === 'left-cheek' ? 'left' : 'right' });
     }
 
     queueTimeout(() => setEyesClosed(true), closeDelay);
