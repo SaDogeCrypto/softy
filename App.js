@@ -290,7 +290,7 @@ export default function App() {
     }
 
     trackClarityEvent('bear_interaction', { zone });
-    trackMetaStandardEvent('Lead', { zone });
+    trackMetaStandardEvent('Contact', { zone });
 
     if (zone === 'nose') {
       trackClarityEvent('nose_booped');
