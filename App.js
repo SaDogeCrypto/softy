@@ -9,6 +9,7 @@ const bearSize = Math.min(width, height) * 0.7;
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
 const clarityProjectId = process.env.EXPO_PUBLIC_CLARITY_PROJECT_ID;
+const metaPixelId = process.env.EXPO_PUBLIC_META_PIXEL_ID;
 
 function loadClarity(projectId) {
   if (
@@ -35,6 +36,53 @@ function loadClarity(projectId) {
   document.head.appendChild(script);
 }
 
+function loadMetaPixel(pixelId) {
+  if (
+    Platform.OS !== 'web' ||
+    !pixelId ||
+    typeof window === 'undefined' ||
+    typeof document === 'undefined'
+  ) {
+    return;
+  }
+
+  if (typeof window.fbq === 'function') {
+    return;
+  }
+
+  (function initMetaPixel(f, b, e, v, n, t, s) {
+    if (f.fbq) {
+      return;
+    }
+
+    n = function metaQueue() {
+      n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+    };
+
+    if (!f._fbq) {
+      f._fbq = n;
+    }
+
+    n.push = n;
+    n.loaded = true;
+    n.version = '2.0';
+    n.queue = [];
+    t = b.createElement(e);
+    t.async = true;
+    t.src = v;
+    s = b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t, s);
+    f.fbq = n;
+  })(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+
+  window.fbq('init', pixelId);
+  window.fbq('track', 'PageView');
+  window.fbq('track', 'ViewContent', {
+    content_name: 'Softy Bear Experience',
+    content_category: 'interactive_landing_page',
+  });
+}
+
 function trackClarityEvent(eventName, metadata) {
   if (
     Platform.OS !== 'web' ||
@@ -53,6 +101,27 @@ function trackClarityEvent(eventName, metadata) {
     window.clarity('event', eventName);
   } catch (error) {
     console.warn('Clarity event tracking failed', error);
+  }
+}
+
+function trackMetaEvent(eventName, metadata) {
+  if (
+    Platform.OS !== 'web' ||
+    typeof window === 'undefined' ||
+    typeof window.fbq !== 'function'
+  ) {
+    return;
+  }
+
+  try {
+    if (metadata) {
+      window.fbq('trackCustom', eventName, metadata);
+      return;
+    }
+
+    window.fbq('trackCustom', eventName);
+  } catch (error) {
+    console.warn('Meta Pixel event tracking failed', error);
   }
 }
 
@@ -108,6 +177,7 @@ export default function App() {
 
   useEffect(() => {
     loadClarity(clarityProjectId);
+    loadMetaPixel(metaPixelId);
   }, []);
 
   const queueTimeout = useCallback((callback, delay) => {
@@ -199,15 +269,20 @@ export default function App() {
     }
 
     trackClarityEvent('bear_interaction', { zone });
+    trackMetaEvent('BearInteraction', { zone });
 
     if (zone === 'nose') {
       trackClarityEvent('nose_booped');
+      trackMetaEvent('NoseBooped');
     } else if (zone === 'forehead') {
       trackClarityEvent('forehead_pet');
+      trackMetaEvent('ForeheadPet');
     } else if (zone === 'left-ear' || zone === 'right-ear') {
       trackClarityEvent('ear_tapped', { side: zone === 'left-ear' ? 'left' : 'right' });
+      trackMetaEvent('EarTapped', { side: zone === 'left-ear' ? 'left' : 'right' });
     } else if (zone === 'left-cheek' || zone === 'right-cheek') {
       trackClarityEvent('cheek_tapped', { side: zone === 'left-cheek' ? 'left' : 'right' });
+      trackMetaEvent('CheekTapped', { side: zone === 'left-cheek' ? 'left' : 'right' });
     }
 
     queueTimeout(() => setEyesClosed(true), closeDelay);
