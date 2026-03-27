@@ -125,6 +125,27 @@ function trackMetaEvent(eventName, metadata) {
   }
 }
 
+function trackMetaStandardEvent(eventName, metadata) {
+  if (
+    Platform.OS !== 'web' ||
+    typeof window === 'undefined' ||
+    typeof window.fbq !== 'function'
+  ) {
+    return;
+  }
+
+  try {
+    if (metadata) {
+      window.fbq('track', eventName, metadata);
+      return;
+    }
+
+    window.fbq('track', eventName);
+  } catch (error) {
+    console.warn('Meta Pixel standard event tracking failed', error);
+  }
+}
+
 function getInteractionZone(locationX, locationY) {
   const x = (locationX / bearSize) * 200;
   const y = (locationY / bearSize) * 200;
@@ -269,7 +290,7 @@ export default function App() {
     }
 
     trackClarityEvent('bear_interaction', { zone });
-    trackMetaEvent('BearInteraction', { zone });
+    trackMetaStandardEvent('Lead', { zone });
 
     if (zone === 'nose') {
       trackClarityEvent('nose_booped');
