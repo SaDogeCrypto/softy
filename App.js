@@ -200,10 +200,12 @@ export default function App() {
   const timeoutsRef = useRef([]);
   const idlePromptTimerRef = useRef(null);
   const bubbleHideTimerRef = useRef(null);
+  const blinkTimerRef = useRef(null);
   const recentTapTimesRef = useRef([]);
   const pressStartedAtRef = useRef(0);
   const pressStartPointRef = useRef(null);
   const slowTouchShownRef = useRef(false);
+  const userIsPressingRef = useRef(false);
 
   const BREATH_DURATION = 4000;
   const BREATH_SCALE = 1.06;
@@ -226,6 +228,13 @@ export default function App() {
     if (bubbleHideTimerRef.current) {
       clearTimeout(bubbleHideTimerRef.current);
       bubbleHideTimerRef.current = null;
+    }
+  }, []);
+
+  const clearBlinkTimer = useCallback(() => {
+    if (blinkTimerRef.current) {
+      clearTimeout(blinkTimerRef.current);
+      blinkTimerRef.current = null;
     }
   }, []);
 
@@ -284,6 +293,28 @@ export default function App() {
     }, 5000);
   }, [clearIdlePromptTimer, showBubble]);
 
+  const scheduleBlink = useCallback(() => {
+    clearBlinkTimer();
+    const delay = 2200 + Math.random() * 2400;
+
+    blinkTimerRef.current = setTimeout(() => {
+      if (userIsPressingRef.current) {
+        scheduleBlink();
+        return;
+      }
+
+      setEyesClosed(true);
+
+      const blinkLength = 120 + Math.random() * 80;
+      blinkTimerRef.current = setTimeout(() => {
+        if (!userIsPressingRef.current) {
+          setEyesClosed(false);
+        }
+        scheduleBlink();
+      }, blinkLength);
+    }, delay);
+  }, [clearBlinkTimer]);
+
   const queueTimeout = useCallback((callback, delay) => {
     const id = setTimeout(() => {
       timeoutsRef.current = timeoutsRef.current.filter((timeoutId) => timeoutId !== id);
@@ -328,25 +359,30 @@ export default function App() {
       clearQueuedTimeouts();
       clearIdlePromptTimer();
       clearBubbleHideTimer();
+      clearBlinkTimer();
       if (breatheAnimRef.current) {
         breatheAnimRef.current.stop();
       }
     };
-  }, [clearBubbleHideTimer, clearIdlePromptTimer, clearQueuedTimeouts, startBreathing]);
+  }, [clearBlinkTimer, clearBubbleHideTimer, clearIdlePromptTimer, clearQueuedTimeouts, startBreathing]);
 
   useEffect(() => {
     scheduleIdlePrompt();
+    scheduleBlink();
 
     return () => {
       clearIdlePromptTimer();
       clearBubbleHideTimer();
+      clearBlinkTimer();
     };
-  }, [clearBubbleHideTimer, clearIdlePromptTimer, scheduleIdlePrompt]);
+  }, [clearBlinkTimer, clearBubbleHideTimer, clearIdlePromptTimer, scheduleBlink, scheduleIdlePrompt]);
 
   const handlePressIn = useCallback((event) => {
     clearQueuedTimeouts();
     clearIdlePromptTimer();
+    clearBlinkTimer();
     hideBubble();
+    userIsPressingRef.current = true;
 
     if (breatheAnimRef.current) {
       breatheAnimRef.current.stop();
@@ -492,6 +528,7 @@ export default function App() {
     ]).start();
   }, [
     blushOpacity,
+    clearBlinkTimer,
     clearIdlePromptTimer,
     clearQueuedTimeouts,
     earTilt,
@@ -508,6 +545,7 @@ export default function App() {
 
   const handlePressOut = useCallback(() => {
     clearQueuedTimeouts();
+    userIsPressingRef.current = false;
     queueTimeout(() => setEyesClosed(false), 360);
     queueTimeout(() => setActiveZone('face'), 240);
 
@@ -558,6 +596,7 @@ export default function App() {
       }
       startBreathing(false);
       scheduleIdlePrompt();
+      scheduleBlink();
     }, 700);
   }, [
     blushOpacity,
@@ -568,6 +607,7 @@ export default function App() {
     noseScale,
     petGlow,
     queueTimeout,
+    scheduleBlink,
     scheduleIdlePrompt,
     startBreathing,
   ]);
