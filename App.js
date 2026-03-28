@@ -10,6 +10,9 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
 const clarityProjectId = process.env.EXPO_PUBLIC_CLARITY_PROJECT_ID;
 const metaPixelId = process.env.EXPO_PUBLIC_META_PIXEL_ID;
+const IDLE_BUBBLES = ['go ahead, pet me', 'you can pet me', 'come say hi'];
+const FAST_TAP_BUBBLES = ['easy there', 'gentle paws, please', 'whoa, slow down'];
+const SLOW_TOUCH_BUBBLES = ["mmm, that's nice", 'oh, keep going', 'that feels lovely'];
 
 function loadClarity(projectId) {
   if (
@@ -181,6 +184,19 @@ function getInteractionZone(locationX, locationY) {
   return 'face';
 }
 
+function pickBubbleMessage(messages, lastMessageRef) {
+  if (messages.length === 1) {
+    lastMessageRef.current = messages[0];
+    return messages[0];
+  }
+
+  const candidates = messages.filter((message) => message !== lastMessageRef.current);
+  const pool = candidates.length > 0 ? candidates : messages;
+  const message = pool[Math.floor(Math.random() * pool.length)];
+  lastMessageRef.current = message;
+  return message;
+}
+
 export default function App() {
   const breatheAnim = useRef(new Animated.Value(1)).current;
   const tapPulse = useRef(new Animated.Value(1)).current;
@@ -206,6 +222,7 @@ export default function App() {
   const pressStartPointRef = useRef(null);
   const slowTouchShownRef = useRef(false);
   const userIsPressingRef = useRef(false);
+  const lastBubbleMessageRef = useRef('');
 
   const BREATH_DURATION = 4000;
   const BREATH_SCALE = 1.06;
@@ -289,7 +306,7 @@ export default function App() {
   const scheduleIdlePrompt = useCallback(() => {
     clearIdlePromptTimer();
     idlePromptTimerRef.current = setTimeout(() => {
-      showBubble('go ahead, pet me', 3000);
+      showBubble(pickBubbleMessage(IDLE_BUBBLES, lastBubbleMessageRef), 3000);
     }, 5000);
   }, [clearIdlePromptTimer, showBubble]);
 
@@ -449,7 +466,7 @@ export default function App() {
     trackMetaStandardEvent('AddToCart', { zone });
 
     if (recentTapTimesRef.current.length >= 4) {
-      showBubble('easy there', 2000);
+      showBubble(pickBubbleMessage(FAST_TAP_BUBBLES, lastBubbleMessageRef), 2000);
     }
 
     if (zone === 'nose') {
@@ -632,7 +649,7 @@ export default function App() {
 
     if (now - startedAt > 450 && distance > 14) {
       slowTouchShownRef.current = true;
-      showBubble("mmm, that's nice", 2000);
+      showBubble(pickBubbleMessage(SLOW_TOUCH_BUBBLES, lastBubbleMessageRef), 2000);
     }
   }, [showBubble]);
 
