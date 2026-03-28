@@ -183,6 +183,7 @@ function getInteractionZone(locationX, locationY) {
 
 export default function App() {
   const breatheAnim = useRef(new Animated.Value(1)).current;
+  const tapPulse = useRef(new Animated.Value(1)).current;
   const leanX = useRef(new Animated.Value(0)).current;
   const leanY = useRef(new Animated.Value(0)).current;
   const blushOpacity = useRef(new Animated.Value(0.3)).current;
@@ -332,22 +333,39 @@ export default function App() {
 
     queueTimeout(() => setEyesClosed(true), closeDelay);
 
+    tapPulse.stopAnimation();
+    tapPulse.setValue(0.965);
+
     Animated.parallel([
+      Animated.sequence([
+        Animated.timing(tapPulse, {
+          toValue: 1.035,
+          duration: 110,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(tapPulse, {
+          toValue: 1,
+          duration: 170,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
       Animated.timing(leanX, {
         toValue: deltaX,
-        duration: 800,
+        duration: 280,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
       Animated.timing(leanY, {
         toValue: deltaY,
-        duration: 800,
+        duration: 280,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
       Animated.timing(blushOpacity, {
         toValue: nextBlush,
-        duration: 1200,
+        duration: 260,
         easing: Easing.out(Easing.quad),
         useNativeDriver: false,
       }),
@@ -359,7 +377,7 @@ export default function App() {
       }),
       Animated.timing(noseScale, {
         toValue: nextNoseScale,
-        duration: 220,
+        duration: 180,
         easing: Easing.out(Easing.back(2)),
         useNativeDriver: false,
       }),
@@ -380,58 +398,61 @@ export default function App() {
     petGlow,
     queueTimeout,
     startBreathing,
+    tapPulse,
   ]);
 
   const handlePressOut = useCallback(() => {
     clearQueuedTimeouts();
-    queueTimeout(() => setEyesClosed(false), 500);
-    setActiveZone('face');
+    queueTimeout(() => setEyesClosed(false), 360);
+    queueTimeout(() => setActiveZone('face'), 240);
 
-    Animated.parallel([
+    queueTimeout(() => {
+      Animated.parallel([
       Animated.timing(leanX, {
         toValue: 0,
-        duration: 2000,
+        duration: 520,
         easing: Easing.inOut(Easing.quad),
         useNativeDriver: true,
       }),
       Animated.timing(leanY, {
         toValue: 0,
-        duration: 2000,
+        duration: 520,
         easing: Easing.inOut(Easing.quad),
         useNativeDriver: true,
       }),
       Animated.timing(blushOpacity, {
         toValue: 0.3,
-        duration: 2500,
+        duration: 700,
         easing: Easing.inOut(Easing.quad),
         useNativeDriver: false,
       }),
       Animated.timing(earTilt, {
         toValue: 0,
-        duration: 800,
+        duration: 420,
         easing: Easing.inOut(Easing.quad),
         useNativeDriver: false,
       }),
       Animated.timing(noseScale, {
         toValue: 1,
-        duration: 600,
+        duration: 320,
         easing: Easing.out(Easing.quad),
         useNativeDriver: false,
       }),
       Animated.timing(petGlow, {
         toValue: 0,
-        duration: 900,
+        duration: 420,
         easing: Easing.inOut(Easing.quad),
         useNativeDriver: false,
       }),
-    ]).start();
+      ]).start();
+    }, 120);
 
     queueTimeout(() => {
       if (breatheAnimRef.current) {
         breatheAnimRef.current.stop();
       }
       startBreathing(false);
-    }, 1500);
+    }, 700);
   }, [
     blushOpacity,
     clearQueuedTimeouts,
@@ -479,7 +500,7 @@ export default function App() {
             styles.bear,
             {
               transform: [
-                { scale: breatheAnim },
+                { scale: Animated.multiply(breatheAnim, tapPulse) },
                 { rotate: rotation },
                 { translateY: leanY },
               ],
