@@ -174,6 +174,10 @@ function getInteractionZone(locationX, locationY) {
     return 'forehead';
   }
 
+  if (x > 72 && x < 128 && y > 86 && y < 142) {
+    return 'center-face';
+  }
+
   return 'face';
 }
 
@@ -264,29 +268,46 @@ export default function App() {
 
     let deltaX = ((locationX - centerX) / bearSize) * 8;
     let deltaY = ((locationY - centerY) / bearSize) * 5;
-    let nextBlush = 0.45;
-    let closeDelay = 150;
+    let nextBlush = 0.58;
+    let closeDelay = 120;
+    let nextNoseScale = 1.08;
 
     setActiveZone(zone);
 
     if (zone === 'left-ear') {
       deltaX = -8;
       deltaY = -4;
+      nextNoseScale = 1;
     } else if (zone === 'right-ear') {
       deltaX = 8;
       deltaY = -4;
+      nextNoseScale = 1;
     } else if (zone === 'nose') {
       deltaX = 0;
       deltaY = 2;
       nextBlush = 0.52;
       closeDelay = 80;
+      nextNoseScale = 1.22;
     } else if (zone === 'left-cheek' || zone === 'right-cheek') {
       nextBlush = 0.75;
+      nextNoseScale = 1.04;
     } else if (zone === 'forehead') {
       deltaX = 0;
       deltaY = -6;
       nextBlush = 0.38;
       closeDelay = 220;
+      nextNoseScale = 1;
+    } else if (zone === 'center-face') {
+      deltaX = 0;
+      deltaY = 1.5;
+      nextBlush = 0.68;
+      closeDelay = 90;
+      nextNoseScale = 1.16;
+    } else {
+      const minTiltX = deltaX >= 0 ? 2.5 : -2.5;
+      const minTiltY = deltaY >= 0 ? 1.5 : -1.5;
+      deltaX = Math.abs(deltaX) < 2.5 ? minTiltX : deltaX;
+      deltaY = Math.abs(deltaY) < 1.5 ? minTiltY : deltaY;
     }
 
     trackClarityEvent('bear_interaction', { zone });
@@ -298,6 +319,9 @@ export default function App() {
     } else if (zone === 'forehead') {
       trackClarityEvent('forehead_pet');
       trackMetaEvent('ForeheadPet');
+    } else if (zone === 'center-face') {
+      trackClarityEvent('face_tapped');
+      trackMetaEvent('FaceTapped');
     } else if (zone === 'left-ear' || zone === 'right-ear') {
       trackClarityEvent('ear_tapped', { side: zone === 'left-ear' ? 'left' : 'right' });
       trackMetaEvent('EarTapped', { side: zone === 'left-ear' ? 'left' : 'right' });
@@ -334,7 +358,7 @@ export default function App() {
         useNativeDriver: false,
       }),
       Animated.timing(noseScale, {
-        toValue: zone === 'nose' ? 1.22 : 1,
+        toValue: nextNoseScale,
         duration: 220,
         easing: Easing.out(Easing.back(2)),
         useNativeDriver: false,
