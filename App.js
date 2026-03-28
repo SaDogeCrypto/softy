@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View, Animated, Pressable, Dimensions, Easing, Platform } from 'react-native';
+import { StyleSheet, View, Animated, Pressable, Dimensions, Easing, Platform, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
 
@@ -184,6 +184,8 @@ function getInteractionZone(locationX, locationY) {
 export default function App() {
   const breatheAnim = useRef(new Animated.Value(1)).current;
   const tapPulse = useRef(new Animated.Value(1)).current;
+  const bubbleOpacity = useRef(new Animated.Value(0)).current;
+  const bubbleLift = useRef(new Animated.Value(8)).current;
   const leanX = useRef(new Animated.Value(0)).current;
   const leanY = useRef(new Animated.Value(0)).current;
   const blushOpacity = useRef(new Animated.Value(0.3)).current;
@@ -192,9 +194,16 @@ export default function App() {
   const petGlow = useRef(new Animated.Value(0)).current;
   const [eyesClosed, setEyesClosed] = useState(false);
   const [activeZone, setActiveZone] = useState('face');
+  const [bubbleMessage, setBubbleMessage] = useState('');
 
   const breatheAnimRef = useRef(null);
   const timeoutsRef = useRef([]);
+  const idlePromptTimerRef = useRef(null);
+  const bubbleHideTimerRef = useRef(null);
+  const recentTapTimesRef = useRef([]);
+  const pressStartedAtRef = useRef(0);
+  const pressStartPointRef = useRef(null);
+  const slowTouchShownRef = useRef(false);
 
   const BREATH_DURATION = 4000;
   const BREATH_SCALE = 1.06;
@@ -205,6 +214,75 @@ export default function App() {
     loadClarity(clarityProjectId);
     loadMetaPixel(metaPixelId);
   }, []);
+
+  const clearIdlePromptTimer = useCallback(() => {
+    if (idlePromptTimerRef.current) {
+      clearTimeout(idlePromptTimerRef.current);
+      idlePromptTimerRef.current = null;
+    }
+  }, []);
+
+  const clearBubbleHideTimer = useCallback(() => {
+    if (bubbleHideTimerRef.current) {
+      clearTimeout(bubbleHideTimerRef.current);
+      bubbleHideTimerRef.current = null;
+    }
+  }, []);
+
+  const hideBubble = useCallback(() => {
+    clearBubbleHideTimer();
+    Animated.parallel([
+      Animated.timing(bubbleOpacity, {
+        toValue: 0,
+        duration: 220,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(bubbleLift, {
+        toValue: 8,
+        duration: 220,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        setBubbleMessage('');
+      }
+    });
+  }, [bubbleLift, bubbleOpacity, clearBubbleHideTimer]);
+
+  const showBubble = useCallback((message, visibleMs) => {
+    clearBubbleHideTimer();
+    setBubbleMessage(message);
+    bubbleOpacity.stopAnimation();
+    bubbleLift.stopAnimation();
+
+    Animated.parallel([
+      Animated.timing(bubbleOpacity, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(bubbleLift, {
+        toValue: 0,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    bubbleHideTimerRef.current = setTimeout(() => {
+      hideBubble();
+    }, visibleMs);
+  }, [bubbleLift, bubbleOpacity, clearBubbleHideTimer, hideBubble]);
+
+  const scheduleIdlePrompt = useCallback(() => {
+    clearIdlePromptTimer();
+    idlePromptTimerRef.current = setTimeout(() => {
+      showBubble('go ahead, pet me', 3000);
+    }, 5000);
+  }, [clearIdlePromptTimer, showBubble]);
 
   const queueTimeout = useCallback((callback, delay) => {
     const id = setTimeout(() => {
@@ -248,14 +326,27 @@ export default function App() {
     startBreathing(false);
     return () => {
       clearQueuedTimeouts();
+      clearIdlePromptTimer();
+      clearBubbleHideTimer();
       if (breatheAnimRef.current) {
         breatheAnimRef.current.stop();
       }
     };
-  }, [clearQueuedTimeouts, startBreathing]);
+  }, [clearBubbleHideTimer, clearIdlePromptTimer, clearQueuedTimeouts, startBreathing]);
+
+  useEffect(() => {
+    scheduleIdlePrompt();
+
+    return () => {
+      clearIdlePromptTimer();
+      clearBubbleHideTimer();
+    };
+  }, [clearBubbleHideTimer, clearIdlePromptTimer, scheduleIdlePrompt]);
 
   const handlePressIn = useCallback((event) => {
     clearQueuedTimeouts();
+    clearIdlePromptTimer();
+    hideBubble();
 
     if (breatheAnimRef.current) {
       breatheAnimRef.current.stop();
@@ -266,6 +357,13 @@ export default function App() {
     const centerX = bearSize / 2;
     const centerY = bearSize / 2;
     const zone = getInteractionZone(locationX, locationY);
+    const now = Date.now();
+
+    pressStartedAtRef.current = now;
+    pressStartPointRef.current = { x: locationX, y: locationY };
+    slowTouchShownRef.current = false;
+    recentTapTimesRef.current = recentTapTimesRef.current.filter((time) => now - time < 1000);
+    recentTapTimesRef.current.push(now);
 
     let deltaX = ((locationX - centerX) / bearSize) * 8;
     let deltaY = ((locationY - centerY) / bearSize) * 5;
@@ -313,6 +411,10 @@ export default function App() {
 
     trackClarityEvent('bear_interaction', { zone });
     trackMetaStandardEvent('AddToCart', { zone });
+
+    if (recentTapTimesRef.current.length >= 4) {
+      showBubble('easy there', 2000);
+    }
 
     if (zone === 'nose') {
       trackClarityEvent('nose_booped');
@@ -390,13 +492,16 @@ export default function App() {
     ]).start();
   }, [
     blushOpacity,
+    clearIdlePromptTimer,
     clearQueuedTimeouts,
     earTilt,
+    hideBubble,
     leanX,
     leanY,
     noseScale,
     petGlow,
     queueTimeout,
+    showBubble,
     startBreathing,
     tapPulse,
   ]);
@@ -452,6 +557,7 @@ export default function App() {
         breatheAnimRef.current.stop();
       }
       startBreathing(false);
+      scheduleIdlePrompt();
     }, 700);
   }, [
     blushOpacity,
@@ -462,8 +568,33 @@ export default function App() {
     noseScale,
     petGlow,
     queueTimeout,
+    scheduleIdlePrompt,
     startBreathing,
   ]);
+
+  const handlePressMove = useCallback((event) => {
+    if (slowTouchShownRef.current) {
+      return;
+    }
+
+    const startedAt = pressStartedAtRef.current;
+    const startPoint = pressStartPointRef.current;
+
+    if (!startedAt || !startPoint) {
+      return;
+    }
+
+    const now = Date.now();
+    const { locationX, locationY } = event.nativeEvent;
+    const deltaX = locationX - startPoint.x;
+    const deltaY = locationY - startPoint.y;
+    const distance = Math.hypot(deltaX, deltaY);
+
+    if (now - startedAt > 450 && distance > 14) {
+      slowTouchShownRef.current = true;
+      showBubble("mmm, that's nice", 2000);
+    }
+  }, [showBubble]);
 
   const rotation = leanX.interpolate({
     inputRange: [-8, 8],
@@ -494,7 +625,24 @@ export default function App() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" hidden />
-      <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      {bubbleMessage ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.bubbleWrap,
+            {
+              opacity: bubbleOpacity,
+              transform: [{ translateY: bubbleLift }],
+            },
+          ]}
+        >
+          <View style={styles.bubble}>
+            <Text style={styles.bubbleText}>{bubbleMessage}</Text>
+          </View>
+          <View style={styles.bubbleTail} />
+        </Animated.View>
+      ) : null}
+      <Pressable onPressIn={handlePressIn} onPressMove={handlePressMove} onPressOut={handlePressOut}>
         <Animated.View
           style={[
             styles.bear,
@@ -619,6 +767,40 @@ const styles = StyleSheet.create({
     backgroundColor: '#fef6e4',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bubbleWrap: {
+    position: 'absolute',
+    top: '18%',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  bubble: {
+    backgroundColor: '#fffaf2',
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: '#f2dfc8',
+    shadowColor: '#7c5a3b',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  bubbleTail: {
+    width: 14,
+    height: 14,
+    backgroundColor: '#fffaf2',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#f2dfc8',
+    transform: [{ rotate: '45deg' }, { translateY: -7 }],
+  },
+  bubbleText: {
+    color: '#7a5c40',
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
   },
   bear: {
     backgroundColor: 'transparent',
