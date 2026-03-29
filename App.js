@@ -484,7 +484,7 @@ export default function App() {
   }, [clearBlinkTimer, clearBubbleHideTimer, clearIdlePromptTimer, clearQueuedTimeouts, startBreathing]);
 
   useEffect(() => {
-    scheduleIdlePrompt();
+    showBubble(pickBubbleMessage(IDLE_BUBBLES, lastBubbleMessageRef), 3000);
     scheduleBlink();
 
     return () => {
@@ -492,7 +492,7 @@ export default function App() {
       clearBubbleHideTimer();
       clearBlinkTimer();
     };
-  }, [clearBlinkTimer, clearBubbleHideTimer, clearIdlePromptTimer, scheduleBlink, scheduleIdlePrompt]);
+  }, [clearBlinkTimer, clearBubbleHideTimer, clearIdlePromptTimer, scheduleBlink, showBubble]);
 
   const handlePressIn = useCallback((event) => {
     clearQueuedTimeouts();
