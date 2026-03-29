@@ -10,6 +10,7 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
 const clarityProjectId = process.env.EXPO_PUBLIC_CLARITY_PROJECT_ID;
 const metaPixelId = process.env.EXPO_PUBLIC_META_PIXEL_ID;
+const tikTokPixelId = process.env.EXPO_PUBLIC_TIKTOK_PIXEL_ID;
 const IDLE_BUBBLES = ['go ahead, pet me', 'you can pet me', 'come say hi'];
 const FAST_TAP_BUBBLES = ['easy there', 'gentle paws, please', 'whoa, slow down'];
 const SLOW_TOUCH_BUBBLES = ["mmm, that's nice", 'oh, keep going', 'that feels lovely'];
@@ -86,6 +87,82 @@ function loadMetaPixel(pixelId) {
   });
 }
 
+function loadTikTokPixel(pixelId) {
+  if (
+    Platform.OS !== 'web' ||
+    !pixelId ||
+    typeof window === 'undefined' ||
+    typeof document === 'undefined'
+  ) {
+    return;
+  }
+
+  if (typeof window.ttq === 'object' && typeof window.ttq.page === 'function') {
+    return;
+  }
+
+  (function initTikTokPixel(w, d, t) {
+    w.TiktokAnalyticsObject = t;
+    const ttq = (w[t] = w[t] || []);
+    ttq.methods = [
+      'page',
+      'track',
+      'identify',
+      'instances',
+      'debug',
+      'on',
+      'off',
+      'once',
+      'ready',
+      'alias',
+      'group',
+      'enableCookie',
+      'disableCookie',
+      'holdConsent',
+      'revokeConsent',
+      'grantConsent',
+    ];
+    ttq.setAndDefer = function setAndDefer(target, method) {
+      target[method] = function deferredMethod() {
+        target.push([method].concat(Array.prototype.slice.call(arguments, 0)));
+      };
+    };
+
+    for (let i = 0; i < ttq.methods.length; i += 1) {
+      ttq.setAndDefer(ttq, ttq.methods[i]);
+    }
+
+    ttq.instance = function instance(id) {
+      const instanceQueue = ttq._i[id] || [];
+      for (let i = 0; i < ttq.methods.length; i += 1) {
+        ttq.setAndDefer(instanceQueue, ttq.methods[i]);
+      }
+      return instanceQueue;
+    };
+
+    ttq.load = function load(id, options) {
+      const src = 'https://analytics.tiktok.com/i18n/pixel/events.js';
+      ttq._i = ttq._i || {};
+      ttq._i[id] = [];
+      ttq._i[id]._u = src;
+      ttq._t = ttq._t || {};
+      ttq._t[id] = +new Date();
+      ttq._o = ttq._o || {};
+      ttq._o[id] = options || {};
+
+      const script = d.createElement('script');
+      script.type = 'text/javascript';
+      script.async = true;
+      script.src = `${src}?sdkid=${id}&lib=${t}`;
+      const firstScript = d.getElementsByTagName('script')[0];
+      firstScript.parentNode.insertBefore(script, firstScript);
+    };
+
+    ttq.load(pixelId);
+    ttq.page();
+  })(window, document, 'ttq');
+}
+
 function trackClarityEvent(eventName, metadata) {
   if (
     Platform.OS !== 'web' ||
@@ -146,6 +223,28 @@ function trackMetaStandardEvent(eventName, metadata) {
     window.fbq('track', eventName);
   } catch (error) {
     console.warn('Meta Pixel standard event tracking failed', error);
+  }
+}
+
+function trackTikTokEvent(eventName, metadata) {
+  if (
+    Platform.OS !== 'web' ||
+    typeof window === 'undefined' ||
+    typeof window.ttq !== 'object' ||
+    typeof window.ttq.track !== 'function'
+  ) {
+    return;
+  }
+
+  try {
+    if (metadata) {
+      window.ttq.track(eventName, metadata);
+      return;
+    }
+
+    window.ttq.track(eventName);
+  } catch (error) {
+    console.warn('TikTok Pixel event tracking failed', error);
   }
 }
 
@@ -232,6 +331,7 @@ export default function App() {
   useEffect(() => {
     loadClarity(clarityProjectId);
     loadMetaPixel(metaPixelId);
+    loadTikTokPixel(tikTokPixelId);
   }, []);
 
   const clearIdlePromptTimer = useCallback(() => {
@@ -464,6 +564,7 @@ export default function App() {
 
     trackClarityEvent('bear_interaction', { zone });
     trackMetaStandardEvent('AddToCart', { zone });
+    trackTikTokEvent('AddToCart', { zone });
 
     if (recentTapTimesRef.current.length >= 4) {
       showBubble(pickBubbleMessage(FAST_TAP_BUBBLES, lastBubbleMessageRef), 2000);
